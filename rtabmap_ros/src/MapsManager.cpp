@@ -188,8 +188,6 @@ void MapsManager::init(ros::NodeHandle & nh, ros::NodeHandle & pnh, const std::s
 	latched_.insert(std::make_pair((void*)&octoMapPubFull_, false));
 	octoMapCloud_ = nht->advertise<sensor_msgs::PointCloud2>("octomap_occupied_space", 1, latching_);
 	latched_.insert(std::make_pair((void*)&octoMapCloud_, false));
-	octoMapFrontierCloud_ = nht->advertise<sensor_msgs::PointCloud2>("octomap_global_frontier_space", 1, latching_);
-	latched_.insert(std::make_pair((void*)&octoMapFrontierCloud_, false));
 	octoMapObstacleCloud_ = nht->advertise<sensor_msgs::PointCloud2>("octomap_obstacles", 1, latching_);
 	latched_.insert(std::make_pair((void*)&octoMapObstacleCloud_, false));
 	octoMapGroundCloud_ = nht->advertise<sensor_msgs::PointCloud2>("octomap_ground", 1, latching_);
@@ -349,7 +347,7 @@ void MapsManager::set2DMap(
 			if(!uContains(gridMaps_, iter->first))
 			{
 				rtabmap::SensorData data;
-				data = memory->getNodeData(iter->first, false, false, false, true);
+				data = memory->getSignatureDataConst(iter->first, false, false, false, true);
 				if(data.gridCellSize() == 0.0f)
 				{
 					ROS_WARN("Local occupancy grid doesn't exist for node %d", iter->first);
@@ -415,7 +413,6 @@ bool MapsManager::hasSubscribers() const
 			octoMapPubBin_.getNumSubscribers() != 0 ||
 			octoMapPubFull_.getNumSubscribers() != 0 ||
 			octoMapCloud_.getNumSubscribers() != 0 ||
-			octoMapFrontierCloud_.getNumSubscribers() != 0 ||
 			octoMapObstacleCloud_.getNumSubscribers() != 0 ||
 			octoMapGroundCloud_.getNumSubscribers() != 0 ||
 			octoMapEmptySpace_.getNumSubscribers() != 0 ||
@@ -448,7 +445,6 @@ std::map<int, rtabmap::Transform> MapsManager::updateMapCaches(
 				octoMapPubBin_.getNumSubscribers() != 0 ||
 				octoMapPubFull_.getNumSubscribers() != 0 ||
 				octoMapCloud_.getNumSubscribers() != 0 ||
-				octoMapFrontierCloud_.getNumSubscribers() != 0 ||
 				octoMapObstacleCloud_.getNumSubscribers() != 0 ||
 				octoMapGroundCloud_.getNumSubscribers() != 0 ||
 				octoMapEmptySpace_.getNumSubscribers() != 0 ||
@@ -558,7 +554,7 @@ std::map<int, rtabmap::Transform> MapsManager::updateMapCaches(
 					}
 					else if(memory)
 					{
-						data = memory->getNodeData(iter->first, occupancyGrid_->isGridFromDepth() && !occupancySavedInDB, !occupancyGrid_->isGridFromDepth() && !occupancySavedInDB, false, true);
+						data = memory->getSignatureDataConst(iter->first, occupancyGrid_->isGridFromDepth() && !occupancySavedInDB, !occupancyGrid_->isGridFromDepth() && !occupancySavedInDB, false, true);
 					}
 
 					UDEBUG("Adding grid map %d to cache...", iter->first);
@@ -587,7 +583,7 @@ std::map<int, rtabmap::Transform> MapsManager::updateMapCaches(
 						{
 							// if we are here, it is because we loaded a database with old nodes not having occupancy grid set
 							// try reload again
-							data = memory->getNodeData(iter->first, occupancyGrid_->isGridFromDepth(), !occupancyGrid_->isGridFromDepth(), false, false);
+							data = memory->getSignatureDataConst(iter->first, occupancyGrid_->isGridFromDepth(), !occupancyGrid_->isGridFromDepth(), false, false);
 						}
 						data.uncompressData(
 								occupancyGrid_->isGridFromDepth() && generateGrid?&rgb:0,
@@ -1182,7 +1178,6 @@ void MapsManager::publishMaps(
 		(octoMapPubBin_.getNumSubscribers() && !latched_.at(&octoMapPubBin_)) ||
 		(octoMapPubFull_.getNumSubscribers() && !latched_.at(&octoMapPubFull_)) ||
 		(octoMapCloud_.getNumSubscribers() && !latched_.at(&octoMapCloud_)) ||
-		(octoMapFrontierCloud_.getNumSubscribers() && !latched_.at(&octoMapFrontierCloud_)) ||
 		(octoMapObstacleCloud_.getNumSubscribers() && !latched_.at(&octoMapObstacleCloud_)) ||
 		(octoMapGroundCloud_.getNumSubscribers() && !latched_.at(&octoMapGroundCloud_)) ||
 		(octoMapEmptySpace_.getNumSubscribers() && !latched_.at(&octoMapEmptySpace_)) ||
@@ -1207,17 +1202,15 @@ void MapsManager::publishMaps(
 			latched_.at(&octoMapPubFull_) = true;
 		}
 		if(octoMapCloud_.getNumSubscribers() ||
-			octoMapFrontierCloud_.getNumSubscribers() ||
 			octoMapObstacleCloud_.getNumSubscribers() ||
 			octoMapGroundCloud_.getNumSubscribers() ||
 			octoMapEmptySpace_.getNumSubscribers())
 		{
 			sensor_msgs::PointCloud2 msg;
 			pcl::IndicesPtr obstacleIndices(new std::vector<int>);
-			pcl::IndicesPtr frontierIndices(new std::vector<int>);
 			pcl::IndicesPtr emptyIndices(new std::vector<int>);
 			pcl::IndicesPtr groundIndices(new std::vector<int>);
-			pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud = octomap_->createCloud(octomapTreeDepth_, obstacleIndices.get(), emptyIndices.get(), groundIndices.get(), true, frontierIndices.get());
+			pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud = octomap_->createCloud(octomapTreeDepth_, obstacleIndices.get(), emptyIndices.get(), groundIndices.get());
 
 			if(octoMapCloud_.getNumSubscribers())
 			{
@@ -1229,16 +1222,6 @@ void MapsManager::publishMaps(
 				msg.header.stamp = stamp;
 				octoMapCloud_.publish(msg);
 				latched_.at(&octoMapCloud_) = true;
-			}
-			if(octoMapFrontierCloud_.getNumSubscribers())
-			{
-				pcl::PointCloud<pcl::PointXYZRGB> cloudFrontier;
-				pcl::copyPointCloud(*cloud, *frontierIndices, cloudFrontier);
-				pcl::toROSMsg(cloudFrontier, msg);
-				msg.header.frame_id = mapFrameId;
-				msg.header.stamp = stamp;
-				octoMapFrontierCloud_.publish(msg);
-				latched_.at(&octoMapFrontierCloud_) = true;
 			}
 			if(octoMapObstacleCloud_.getNumSubscribers())
 			{
@@ -1319,7 +1302,6 @@ void MapsManager::publishMaps(
 		octoMapPubBin_.getNumSubscribers() == 0 &&
 		octoMapPubFull_.getNumSubscribers() == 0 &&
 		octoMapCloud_.getNumSubscribers() == 0 &&
-		octoMapFrontierCloud_.getNumSubscribers() == 0 &&
 		octoMapObstacleCloud_.getNumSubscribers() == 0 &&
 		octoMapGroundCloud_.getNumSubscribers() == 0 &&
 		octoMapEmptySpace_.getNumSubscribers() == 0 &&
@@ -1339,10 +1321,6 @@ void MapsManager::publishMaps(
 	if(octoMapCloud_.getNumSubscribers() == 0)
 	{
 		latched_.at(&octoMapCloud_) = false;
-	}
-	if(octoMapFrontierCloud_.getNumSubscribers() == 0)
-	{
-		latched_.at(&octoMapFrontierCloud_) = false;
 	}
 	if(octoMapObstacleCloud_.getNumSubscribers() == 0)
 	{

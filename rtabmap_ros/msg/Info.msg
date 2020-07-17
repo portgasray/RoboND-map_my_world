@@ -14,9 +14,6 @@ geometry_msgs/Transform loopClosureTransform
 ####
 # For statistics...
 ####
-# State (node IDs) of the current Working Memory (including STM)
-int32[] wmState
-
 # std::map<int, float> posterior;
 int32[] posteriorKeys
 float32[] posteriorValues

@@ -53,6 +53,31 @@
 
       <!-- Set to false to avoid saving data when robot is not moving -->
       <param name="Mem/NotLinkedNodesKept" type="string" value="false"/>
+
+      <!-- Tuning -->
+      <!-- 0=Frame-to-Map (F2M) 1=Frame-to-Frame (F2F) -->
+      <param name="Odom/Strategy" value="0"/>
+      <!-- Correspondences: 0=Features Matching, 1=Optical Flow -->
+      <param name="Vis/CorType" value="0"/>
+
+      <!-- maximum features map size, default 2000 -->
+      <param name="OdomF2M/MaxSize" type="string" value="2500"/> 
+      <!-- maximum features extracted by image, default 1000 -->
+      <param name="Vis/MaxFeatures" type="string" value="1200"/>
+
+      <!-- Odometry Auto-Reset -->
+      <param name="Rtabmap/StartNewMapOnLoopClosure" value="true"/>
+      
+      <!-- Change Feature Distance: minimum distance between extracted features -->
+      <param name="GFTT/MinDistance" type="string" value="6"/> <!-- default 5 pixels -->
+      
+      <!-- Change inital costmap size for move_base -->
+      <param name="grid_size" type="double" value="15"/> <!-- 15 meters wide -->
+
+      <!-- Reduce Point Cloud Noises -->
+      <param name="cloud_noise_filtering_radius" value="0.05"/>
+      <param name="cloud_noise_filtering_min_neighbors" value="2"/>
+
     </node>
   </group>
 
